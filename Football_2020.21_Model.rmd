@@ -1,0 +1,457 @@
+---
+title: "Football 2021 Model"
+author: "Donovan Robertson"
+date: "12/04/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load Files
+
+Load the packages to use in R Studio
+
+
+```{r}
+library(dplyr)
+library(skellam)
+library(ggplot2)
+library(purrr)
+library(tidyr)
+library(MASS)
+library(pscl)
+library(lmtest)
+library(nonnest2)
+```
+
+
+## Select the EPL data
+
+
+```{r}
+options(stringsAsFactors = FALSE)
+footballdata<-read.csv("FootballData.csv")
+
+epldata<-subset(footballdata, Div=="E0", select=c(4:7))
+colnames(epldata)<-c("home", "away", "homegoals", "awaygoals")
+epldata$homegoals=as.numeric(as.character(epldata$homegoals))
+epldata$awaygoals=as.numeric(as.character(epldata$awaygoals))
+```
+
+
+# Comparison of EPL average goals scored vs against
+
+```{r}
+data.frame(average_home_goals=mean(epldata$homegoals),
+           average_away_goals=mean(epldata$awaygoals))
+```
+
+
+#Distribution of goals
+
+```{r}
+mean(epldata$homegoals)
+```
+
+```{r}
+epldata %>% count(epldata$homegoals)
+```
+
+
+```{r}
+epldata %>% count(epldata$awaygoals)
+```
+
+
+
+
+
+#Histograms
+```{r}
+hist(epldata$homegoals, breaks=10,  main = "Histogram of EPL Home Goals", xlab="Number of Home Team Goals", freq=FALSE,xaxp=c(0,10,10))
+lines(0:max(epldata$homegoals), dpois(0:max(epldata$homegoals), mean(epldata$homegoals)), col='red')
+```
+
+# Comparison of EPL average goals scored vs against
+
+```{r}
+data.frame(average_home_goals=mean(epldata$homegoals),
+           average_away_goals=mean(epldata$awaygoals))
+```
+
+```{r}
+data.frame(variance_home_goals=var(epldata$homegoals),
+           variance_away_goals=var(epldata$awaygoals))
+```
+
+
+
+
+```{r}
+x=(0:9)
+dpois(x,1.334416,FALSE)
+```
+
+
+
+
+```{r}
+hist(epldata$awaygoals, breaks=8, main= "Histogram of EPL Away Goals", xlab="Number of Away Team Goals", freq=FALSE, xaxp=c(0,8,8))
+lines(0:max(epldata$awaygoals), dpois(0:max(epldata$awaygoals), mean(epldata$awaygoals)), col='red')
+```
+
+# Comparison of EPL average goals scored vs against
+
+```{r}
+data.frame(average_home_goals=mean(epldata$homegoals),
+           average_away_goals=mean(epldata$awaygoals))
+```
+
+
+```{r}
+x2=(0:9)
+dpois(x2,1.340909,FALSE)
+```
+
+
+```{r}
+var(epldata$homegoals)
+var(epldata$awaygoals)
+```
+
+```{r}
+AIC(eplpoisson_model, eplzeroinfl_model)
+```
+
+
+
+#EPL Poisson GLM Model 
+```{r}
+eplpoisson_model<-
+  rbind(
+    data.frame(goals=epldata$homegoals,
+               team=epldata$home,
+               opponent=epldata$away,
+               home=1),
+    data.frame(goals=epldata$awaygoals,
+               team=epldata$away,
+               opponent=epldata$home,
+               home=0)) %>%
+  glm(goals ~ home + team + opponent, family=poisson(link=log), data=.)
+
+summary(eplpoisson_model)
+```
+
+#Model Checking
+
+```{r}
+fitted.values<-eplpoisson_model$fitted.values
+standard.residuals<-(eplpoisson_model$residuals)
+plot(fitted.values,standard.residuals, ylab='Standardised Residuals', xlab='Fitted Values', abline(0,0,col='blue'), ylim=c(-2,8), main='Residual Plot for EPL Poisson GLM')
+hist(standard.residuals, xlim=c(-1.75,7), main='Histogram of Standard Residuals', xlab='Standard Residuals')
+qqnorm(standard.residuals, ylim=c(-1,7))
+abline(0,1,col='blue')
+```
+
+```{r}
+dput(coef(eplzeroinfl_model,"count"))
+dput(coef(eplzeroinfl_model, "zero"))
+```
+
+
+
+
+
+
+
+```{r}
+qqnorm(epldata$awaygoals)
+qqline(epldata$awaygoals, col='red')
+```
+
+
+#Negative Biomial Model
+
+
+glm.nb(goals ~ home + team + opponent, family=negative.binomial(link=log), data=.)
+
+
+```{r}
+eplnegativebinomial_model<-
+  rbind(
+    data.frame(goals=epldata$homegoals,
+               team=epldata$home,
+               opponent=epldata$away,
+               home=1),
+    data.frame(goals=epldata$awaygoals,
+               team=epldata$away,
+               opponent=epldata$home,
+               home=0)) %>%
+  glm.nb(goals ~ home + team + opponent, data=.)
+
+summary(eplnegativebinomial_model)
+```
+
+```{r}
+fitted.values2<-eplnegativebinomial_model$fitted.values
+standard.residuals2<-(eplnegativebinomial_model$residuals)
+plot(fitted.values2,standard.residuals2)
+hist(standard.residuals2)
+qqnorm(standard.residuals2)
+abline(0,1)
+```
+
+
+
+##Poisson Zero Inflated Model 
+
+```{r}
+eplzeroinfl_model<-
+  rbind(
+    data.frame(goals=epldata$homegoals,
+               team=epldata$home,
+               opponent=epldata$away,
+               home=1),
+    data.frame(goals=epldata$awaygoals,
+               team=epldata$away,
+               opponent=epldata$home,
+               home=0)) %>%
+ zeroinfl(goals ~ home + team + opponent, family=poisson(link=log), data=.)
+
+summary(eplzeroinfl_model)
+```
+
+```{r}
+fitted.values3<-eplzeroinfl_model$fitted.values
+standard.residuals3<-(eplzeroinfl_model$residuals)
+plot(fitted.values3,standard.residuals3, main='Residual Plot for EPL Zero Inflated Poisson GLM', ylab='Standard Residuals', xlab='Fitted Values', abline(0,0, col='blue'), ylim=c(-4,6))
+hist(standard.residuals3, main='Histogram of Standard Residuals', xlab='Standard Residuals')
+qqnorm(standard.residuals3)
+abline(0,1,col='blue')
+```
+
+
+```{r}
+eplquasi_model<-
+  rbind(
+    data.frame(goals=epldata$homegoals,
+               team=epldata$home,
+               opponent=epldata$away,
+               home=1),
+    data.frame(goals=epldata$awaygoals,
+               team=epldata$away,
+               opponent=epldata$home,
+               home=0)) %>%
+ glm(goals ~ home + team + opponent, family=quasipoisson(link=log), data=.)
+
+summary(eplquasi_model)
+```
+
+```{r}
+fitted.values4<-eplquasi_model$fitted.values
+standard.residuals4<-(eplquasi_model$residuals)
+plot(fitted.values4,standard.residuals4, main='Residual Plot for EPL Zero Inflated Poisson GLM', ylab='Standard Residuals', xlab='Fitted Values', abline(0,0, col='blue'), ylim=c(-4,6))
+hist(standard.residuals4, main='Histogram of Standard Residuals', xlab='Standard Residuals')
+qqnorm(standard.residuals4)
+abline(0,1,col='blue')
+```
+
+```{r}
+lrtest(eplpoisson_model, eplzeroinfl_model)
+```
+
+```{r}
+vuongtest(eplpoisson_model, eplzeroinfl_model)
+```
+
+
+
+
+```{r}
+exp(0.1293802366)
+exp(-0.2688992893)
+1-0.7642202
+```
+
+```{r}
+0.24947985/0.23358043
+```
+
+
+```{r}
+res=resid(eplpoisson_model, type="pear")
+sqrt(sum(res^2)/576)
+```
+
+
+```{r}
+predict(eplpoisson_model, data.frame(home=1, team="Leeds", opponent="Liverpool"), type="response")
+```
+
+```{r}
+exp(0.1293802-0.0001433+0.1464553+0.0967824)
+0.1293802-0.0001433+0.1464553+0.0967824
+```
+
+
+```{r}
+predict(eplpoisson_model, data.frame(home=0, team="Liverpool", opponent="Leeds"), type="response")
+```
+
+```{r}
+exp(0.1293802+0.2379885+0.3902404)
+0.1293802+0.2379885+0.3902404
+```
+
+
+```{r}
+predict(eplpoisson_model, data.frame(home=1, team="Arsenal", opponent="Fulham"), type="response")
+```
+
+```{r}
+exp(0.1293802-0.0001433+0.1609880)
+```
+
+
+
+
+
+
+```{r}
+simulate_match<-function(foot_model, hometeam, awayteam, max_goals=10){
+  home_goals_average <-predict(foot_model, 
+                               data.frame(home=1, team=hometeam,
+                                          opponent=awayteam), type="response")
+  away_goals_average<-predict(foot_model,
+                              data.frame(home=0, team=awayteam,
+                                         opponent=hometeam), type="response")
+  dpois(0:max_goals,home_goals_average) %o% dpois(0:max_goals, away_goals_average)}
+```
+
+```{r}
+simulate_match(eplzeroinfl_model, "Leeds", "Liverpool", max_goals=10) 
+```
+
+
+#EPL Poisson Predictions
+
+```{r}
+Everton_Tottenham<-simulate_match(eplpoisson_model, "Everton", "Tottenham", max_goals=10)
+sum(Everton_Tottenham[lower.tri(Everton_Tottenham)])
+sum(diag(Everton_Tottenham))
+sum(Everton_Tottenham[upper.tri(Everton_Tottenham)])
+```
+
+
+```{r}
+Newcastle_WestHam<-simulate_match(eplpoisson_model, "Newcastle", "West Ham", max_goals=10)
+sum(Newcastle_WestHam[lower.tri(Newcastle_WestHam)])
+sum(diag(Newcastle_WestHam))
+sum(Newcastle_WestHam[upper.tri(Newcastle_WestHam)])
+```
+
+
+```{r}
+Wolves_SheffieldUnited<-simulate_match(eplpoisson_model, "Wolves", "Sheffield United", max_goals=10)
+sum(Wolves_SheffieldUnited[lower.tri(Wolves_SheffieldUnited)])
+sum(diag(Wolves_SheffieldUnited))
+sum(Wolves_SheffieldUnited[upper.tri(Wolves_SheffieldUnited)])
+```
+
+
+```{r}
+Arsenal_Fulham<-simulate_match(eplpoisson_model, "Arsenal", "Fulham", max_goals=10)
+sum(Arsenal_Fulham[lower.tri(Arsenal_Fulham)])
+sum(diag(Arsenal_Fulham))
+sum(Arsenal_Fulham[upper.tri(Arsenal_Fulham)])
+```
+
+
+```{r}
+ManUnited_Burnley<-simulate_match(eplpoisson_model, "Man United", "Burnley", max_goals=10)
+sum(ManUnited_Burnley[lower.tri(ManUnited_Burnley)])
+sum(diag(ManUnited_Burnley))
+sum(ManUnited_Burnley[upper.tri(ManUnited_Burnley)])
+```
+
+
+
+
+```{r}
+Leeds_Liverpool<-simulate_match(eplpoisson_model, "Leeds", "Liverpool", max_goals=10)
+sum(Leeds_Liverpool[lower.tri(Leeds_Liverpool)])
+sum(diag(Leeds_Liverpool))
+sum(Leeds_Liverpool[upper.tri(Leeds_Liverpool)])
+```
+
+```{r}
+Chelsea_Brighton<-simulate_match(eplpoisson_model, "Chelsea", "Brighton", max_goals=10)
+sum(Chelsea_Brighton[lower.tri(Chelsea_Brighton)])
+sum(diag(Chelsea_Brighton))
+sum(Chelsea_Brighton[upper.tri(Chelsea_Brighton)])
+```
+
+
+
+#EPL Zero Inflation Predictions
+
+
+```{r}
+Everton_Tottenham<-simulate_match(eplzeroinfl_model, "Everton", "Tottenham", max_goals=10)
+sum(Everton_Tottenham[lower.tri(Everton_Tottenham)])
+sum(diag(Everton_Tottenham))
+sum(Everton_Tottenham[upper.tri(Everton_Tottenham)])
+```
+
+
+```{r}
+Newcastle_WestHam<-simulate_match(eplzeroinfl_model, "Newcastle", "West Ham", max_goals=10)
+sum(Newcastle_WestHam[lower.tri(Newcastle_WestHam)])
+sum(diag(Newcastle_WestHam))
+sum(Newcastle_WestHam[upper.tri(Newcastle_WestHam)])
+```
+
+
+```{r}
+Wolves_SheffieldUnited<-simulate_match(eplzeroinfl_model, "Wolves", "Sheffield United", max_goals=10)
+sum(Wolves_SheffieldUnited[lower.tri(Wolves_SheffieldUnited)])
+sum(diag(Wolves_SheffieldUnited))
+sum(Wolves_SheffieldUnited[upper.tri(Wolves_SheffieldUnited)])
+```
+
+
+```{r}
+Arsenal_Fulham<-simulate_match(eplzeroinfl_model, "Arsenal", "Fulham", max_goals=10)
+sum(Arsenal_Fulham[lower.tri(Arsenal_Fulham)])
+sum(diag(Arsenal_Fulham))
+sum(Arsenal_Fulham[upper.tri(Arsenal_Fulham)])
+```
+
+
+```{r}
+ManUnited_Burnley<-simulate_match(eplzeroinfl_model, "Man United", "Burnley", max_goals=10)
+sum(ManUnited_Burnley[lower.tri(ManUnited_Burnley)])
+sum(diag(ManUnited_Burnley))
+sum(ManUnited_Burnley[upper.tri(ManUnited_Burnley)])
+```
+
+
+```{r}
+Leeds_Liverpool<-simulate_match(eplzeroinfl_model, "Leeds", "Liverpool", max_goals=10)
+sum(Leeds_Liverpool[lower.tri(Leeds_Liverpool)])
+sum(diag(Leeds_Liverpool))
+sum(Leeds_Liverpool[upper.tri(Leeds_Liverpool)])
+```
+
+
+```{r}
+Chelsea_Brighton<-simulate_match(eplzeroinfl_model, "Chelsea", "Brighton", max_goals=10)
+sum(Chelsea_Brighton[lower.tri(Chelsea_Brighton)])
+sum(diag(Chelsea_Brighton))
+sum(Chelsea_Brighton[upper.tri(Chelsea_Brighton)])
+```
+
+
+
